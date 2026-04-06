@@ -8,16 +8,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Fix Folders (Smartphone Hack)
-        # Этот шаг превратит твои "плоские" файлы в структуру папок Android
+      - name: Force Fix Structure
         run: |
-          mkdir -p app/src/main/java/com/example/reader
-          # Ищем твой файл с кодом и кладем его куда нужно
-          find . -name "MainActivity.kt" -exec cp {} app/src/main/java/com/example/reader/MainActivity.kt \;
-          # Ищем манифест
-          find . -name "AndroidManifest.xml" -exec cp {} app/src/main/AndroidManifest.xml \;
-          # Проверяем build.gradle
-          find . -name "build.gradle" -not -path "./build.gradle" -exec cp {} app/build.gradle \;
+          # 1. Создаем чистую структуру папок
+          mkdir -p temp_app/src/main/java/com/example/reader
+          
+          # 2. Ищем самый большой build.gradle (наш основной) и копируем в temp_app
+          find . -name "build.gradle" -exec grep -l "com.android.application" {} + | head -n 1 | xargs -I {} cp {} temp_app/build.gradle
+          
+          # 3. Ищем манифест и код
+          find . -name "AndroidManifest.xml" -exec cp {} temp_app/src/main/AndroidManifest.xml \;
+          find . -name "MainActivity.kt" -exec cp {} temp_app/src/main/java/com/example/reader/MainActivity.kt \;
+          
+          # 4. Удаляем старую папку app (если она мешает) и заменяем новой
+          rm -rf app
+          mv temp_app app
+          
+          # 5. Создаем правильный settings.gradle
+          echo "include ':app'" > settings.gradle
+          echo "rootProject.name = 'Material-Reader'" >> settings.gradle
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -31,11 +40,10 @@ jobs:
           gradle-version: 8.1.1
 
       - name: Build APK
-        # Собираем конкретно модуль :app
         run: gradle :app:assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ReaderApp-Final
+          name: Reader-Final-v1
           path: app/build/outputs/apk/debug/*.apk
